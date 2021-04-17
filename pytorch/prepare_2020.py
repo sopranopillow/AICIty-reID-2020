@@ -8,7 +8,7 @@ if not os.path.isdir(save_path):
     os.mkdir(save_path)
 
 #train_all
-train_path = download_path + '/2020AICITY/'
+train_path = download_path + '/2020AICITY/aicity20_all/image_train/'
 virtual_path = download_path + '/pytorch2020/virtual'
 train_real_save_path = download_path + '/pytorch2020/train_real_all'
 if not os.path.isdir(virtual_path):
@@ -76,7 +76,7 @@ if not os.path.isdir(val_save_path):
                 else:
                     cam_id = int(camID[1][0:3])
                     vid = ID[0]
-                    print(int(vid), int(cam_id))
+                    # print(int(vid), int(cam_id))
                     if m[int(vid)-400][int(cam_id)] == 0:
                         m[int(vid)-400][int(cam_id)] = 1
                         if not os.path.isdir(dst_path_q):

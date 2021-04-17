@@ -7,7 +7,7 @@ if not os.path.isdir(save_path):
     os.mkdir(save_path)
 
 #train_all
-train_path = download_path + '/2020AICITY/'
+train_path = download_path + '/2020AICITY/aicity20_all/image_train/'
 virtual_path = download_path + '/pytorch2020-cam/virtual'
 train_real_save_path = download_path + '/pytorch2020-cam/train_real'
 train_all_save_path = download_path + '/pytorch2020-cam/train'
@@ -21,8 +21,9 @@ if not os.path.isdir(virtual_path):
             if not name[-3:]=='jpg':
                 continue
             cID = name.split('c')
+            if len(cID[1])< 3:
+                print(cID)
             cID = cID[1][0:3]
-            print(cID)
             src_path = train_path + '/' + name
             dst_path = virtual_path + '/' + cID
             dst_real_path = train_real_save_path + '/' + cID

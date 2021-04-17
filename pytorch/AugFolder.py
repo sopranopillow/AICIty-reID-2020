@@ -17,7 +17,7 @@ class AugFolder(datasets.ImageFolder):
     def __getitem__(self, index):
         path, target = self.samples[index]
         sample = self.loader(path)
-        sample2 = sample.copy() 
+        sample2 = sample.copy()
         if self.transform is not None:
             sample = self.transform(sample)
             sample2 = self.transform2(sample2)

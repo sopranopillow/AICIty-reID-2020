@@ -211,8 +211,8 @@ else:
 
 if opt.balance:
     dataset_train = image_datasets['train']
-    weights = make_weights_for_balanced_classes(dataset_train.imgs, len(dataset_train.classes))                                                                
-    weights = torch.DoubleTensor(weights)   
+    weights = make_weights_for_balanced_classes(dataset_train.imgs, len(dataset_train.classes))
+    weights = torch.DoubleTensor(weights)
     sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
     dataloaders = {}
     dataloaders['train'] = torch.utils.data.DataLoader(image_datasets['train'], batch_size=opt.batchsize, sampler=sampler, num_workers=8, pin_memory=True) # 8 workers may work faster
@@ -543,7 +543,7 @@ exp_lr_scheduler = lr_scheduler.MultiStepLR(optimizer_ft, milestones=[60-start_e
 # Train and evaluate
 # ^^^^^^^^^^^^^^^^^^
 #
-# It should take around 1-2 hours on GPU. 
+# It should take around 1-2 hours on GPU.
 #
 dir_name = os.path.join('./data/outputs',name)
 
