@@ -26,6 +26,7 @@ import random
 from autoaugment import ImageNetPolicy
 from utils import get_model_list, load_network, save_network, make_weights_for_balanced_classes
 
+
 version =  torch.__version__
 #fp16
 try:
@@ -114,7 +115,7 @@ if len(opt.gpu_ids)>0:
 
 if opt.h == opt.w:
     transform_train_list = [
-        #transforms.RandomRotation(30), 
+        #transforms.RandomRotation(30),
         transforms.Resize((opt.inputsize, opt.inputsize), interpolation=3),
         transforms.Pad(15),
         #transforms.RandomCrop((256,256)),
@@ -206,8 +207,8 @@ if not opt.autoaug:
     image_datasets['train'] = datasets.ImageFolder(os.path.join(data_dir, 'train' + train_all),
                                           data_transforms['train'])
 else:
-    image_datasets['train'] = AugFolder(os.path.join(data_dir, 'train' + train_all),
-                                          data_transforms['train'], data_transforms['train_aug'])
+    # image_datasets['train'] = AugFolder(os.path.join(data_dir, 'train' + train_all),
+    image_datasets['train'] = AugFolder(os.path.join(data_dir, 'train'), data_transforms['train'], data_transforms['train_aug'])
 
 if opt.balance:
     dataset_train = image_datasets['train']
@@ -216,7 +217,7 @@ if opt.balance:
     sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
     dataloaders = {}
     dataloaders['train'] = torch.utils.data.DataLoader(image_datasets['train'], batch_size=opt.batchsize, sampler=sampler, num_workers=8, pin_memory=True) # 8 workers may work faster
-else: 
+else:
     dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=opt.batchsize,
                                              shuffle=True, num_workers=8, pin_memory=True) # 8 workers may work faster
                                              for x in ['train']}
@@ -302,7 +303,7 @@ def train_model(model, criterion, optimizer, scheduler, start_epoch=0, num_epoch
                 # if we use low precision, input also need to be fp16
                 #if fp16:
                 #    inputs = inputs.half()
- 
+
                 # zero the parameter gradients
                 optimizer.zero_grad()
 
@@ -367,17 +368,17 @@ def train_model(model, criterion, optimizer, scheduler, start_epoch=0, num_epoch
                 else :  # for the old version like 0.3.0 and 0.3.1
                     running_loss += loss.data[0] * now_batch_size
                 running_corrects += float(torch.sum(preds == labels.data))
-                
+
                 del(loss, outputs, inputs, preds)
 
             epoch_loss = running_loss / dataset_sizes[phase]
             epoch_acc = running_corrects / dataset_sizes[phase]
-            
+
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
-            
+
             y_loss[phase].append(epoch_loss)
-            y_err[phase].append(1.0-epoch_acc)            
+            y_err[phase].append(1.0-epoch_acc)
             # deep copy the model
             if len(opt.gpu_ids)>1:
                 save_network(model.module, opt.name, epoch+1)
@@ -404,174 +405,175 @@ def train_model(model, criterion, optimizer, scheduler, start_epoch=0, num_epoch
     save_network(model, opt.name, 'last')
     return model
 
+if __name__ == "__main__":
+    ######################################################################
+    # Draw Curve
+    #---------------------------
+    x_epoch = []
+    fig = plt.figure()
+    ax0 = fig.add_subplot(121, title="loss")
+    ax1 = fig.add_subplot(122, title="top1err")
+    def draw_curve(current_epoch):
+        x_epoch.append(current_epoch)
+        ax0.plot(x_epoch, y_loss['train'], 'bo-', label='train')
+        #ax0.plot(x_epoch, y_loss['val'], 'ro-', label='val')
+        ax1.plot(x_epoch, y_err['train'], 'bo-', label='train')
+        #ax1.plot(x_epoch, y_err['val'], 'ro-', label='val')
+        if current_epoch == 0:
+            ax0.legend()
+            ax1.legend()
+        fig.savefig( os.path.join('./data/outputs',name,'train.png'))
 
-######################################################################
-# Draw Curve
-#---------------------------
-x_epoch = []
-fig = plt.figure()
-ax0 = fig.add_subplot(121, title="loss")
-ax1 = fig.add_subplot(122, title="top1err")
-def draw_curve(current_epoch):
-    x_epoch.append(current_epoch)
-    ax0.plot(x_epoch, y_loss['train'], 'bo-', label='train')
-    #ax0.plot(x_epoch, y_loss['val'], 'ro-', label='val')
-    ax1.plot(x_epoch, y_err['train'], 'bo-', label='train')
-    #ax1.plot(x_epoch, y_err['val'], 'ro-', label='val')
-    if current_epoch == 0:
-        ax0.legend()
-        ax1.legend()
-    fig.savefig( os.path.join('./data/outputs',name,'train.png'))
+
+    ######################################################################
+    # Finetuning the convnet
+    # ----------------------
+    #
+    # Load a pretrainied model and reset final fully connected layer.
+    #
+
+    if not opt.resume:
+        opt.nclasses = len(class_names)
+        if opt.use_dense:
+            model = ft_net_dense(len(class_names), opt.droprate, opt.stride, None, opt.pool)
+        elif opt.use_NAS:
+            model = ft_net_NAS(len(class_names), opt.droprate, opt.stride) 
+        elif opt.use_SE:
+            model = ft_net_SE(len(class_names), opt.droprate, opt.stride, opt.pool)
+        elif opt.use_DSE:
+            model = ft_net_DSE(len(class_names), opt.droprate, opt.stride, opt.pool)
+        elif opt.use_IR:
+            model = ft_net_IR(len(class_names), opt.droprate, opt.stride)
+        elif opt.use_EF4:
+            model = ft_net_EF4(len(class_names), opt.droprate)
+        elif opt.use_EF5:
+            model = ft_net_EF5(len(class_names), opt.droprate)
+        elif opt.use_EF6:
+            model = ft_net_EF6(len(class_names), opt.droprate)
+        else:
+            model = ft_net(len(class_names), opt.droprate, opt.stride, None, opt.pool)
+
+        if opt.PCB:
+            model = PCB(len(class_names))
+
+        if opt.CPB:
+            model = CPB(len(class_names))
+
+        if opt.angle:
+            model = ft_net_angle(len(class_names), opt.droprate, opt.stride)
+        elif opt.arc:
+            model = ft_net_arc(len(class_names), opt.droprate, opt.stride)
+
+    if opt.init_name != 'imagenet':
+        old_opt = parser.parse_args()
+        init_model, old_opt, _ = load_network(opt.init_name, old_opt)
+        print(old_opt)
+        opt.stride = old_opt.stride
+        opt.pool = old_opt.pool
+        opt.use_dense = old_opt.use_dense
+        if opt.use_dense:
+            model = ft_net_dense(opt.nclasses, droprate=opt.droprate, stride=opt.stride, init_model=init_model, pool = opt.pool)
+        else:
+            model = ft_net(opt.nclasses, droprate=opt.droprate, stride=opt.stride, init_model=init_model, pool = opt.pool)
 
 
-######################################################################
-# Finetuning the convnet
-# ----------------------
-#
-# Load a pretrainied model and reset final fully connected layer.
-#
+    ##########################
+    #Put model parameter in front of the optimizer!!!
 
-if not opt.resume:
-    opt.nclasses = len(class_names)
-    if opt.use_dense:
-        model = ft_net_dense(len(class_names), opt.droprate, opt.stride, None, opt.pool)
-    elif opt.use_NAS:
-        model = ft_net_NAS(len(class_names), opt.droprate, opt.stride) 
-    elif opt.use_SE:
-        model = ft_net_SE(len(class_names), opt.droprate, opt.stride, opt.pool)
-    elif opt.use_DSE:
-        model = ft_net_DSE(len(class_names), opt.droprate, opt.stride, opt.pool)
-    elif opt.use_IR:
-        model = ft_net_IR(len(class_names), opt.droprate, opt.stride)
-    elif opt.use_EF4:
-        model = ft_net_EF4(len(class_names), opt.droprate)
-    elif opt.use_EF5:
-        model = ft_net_EF5(len(class_names), opt.droprate)
-    elif opt.use_EF6:
-        model = ft_net_EF6(len(class_names), opt.droprate)
+    # For resume:
+    if start_epoch>=60:
+        opt.lr = opt.lr*0.1
+    if start_epoch>=75:
+        opt.lr = opt.lr*0.1
+
+    if len(opt.gpu_ids)>1:
+        model = torch.nn.DataParallel(model, device_ids=opt.gpu_ids).cuda()
+        if not opt.CPB:
+            ignored_params = list(map(id, model.module.classifier.parameters() ))
+            base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
+            optimizer_ft = optim.SGD([
+                {'params': base_params, 'lr': 0.1*opt.lr},
+                {'params': model.module.classifier.parameters(), 'lr': opt.lr}
+            ], weight_decay=5e-4, momentum=0.9, nesterov=True)
+        else:
+            ignored_params = (list(map(id, model.module.classifier0.parameters() ))
+                        +list(map(id, model.module.classifier1.parameters() ))
+                        +list(map(id, model.module.classifier2.parameters() ))
+                        +list(map(id, model.module.classifier3.parameters() ))
+                        )
+            base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
+            optimizer_ft = optim.SGD([
+                {'params': base_params, 'lr': 0.1*opt.lr},
+                {'params': model.module.classifier0.parameters(), 'lr': opt.lr},
+                {'params': model.module.classifier1.parameters(), 'lr': opt.lr},
+                {'params': model.module.classifier2.parameters(), 'lr': opt.lr},
+                {'params': model.module.classifier3.parameters(), 'lr': opt.lr},
+            ], weight_decay=5e-4, momentum=0.9, nesterov=True)
     else:
-        model = ft_net(len(class_names), opt.droprate, opt.stride, None, opt.pool)
+        model = model.cuda()
+        if not opt.CPB:
+            ignored_params = list(map(id, model.classifier.parameters() ))
+            base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
+            optimizer_ft = optim.SGD([
+                {'params': base_params, 'lr': 0.1*opt.lr},
+                {'params': model.classifier.parameters(), 'lr': opt.lr}
+            ], weight_decay=5e-4, momentum=0.9, nesterov=True)
+        else:
+            ignored_params = (list(map(id, model.classifier0.parameters() )) 
+                        +list(map(id, model.classifier1.parameters() ))
+                        +list(map(id, model.classifier2.parameters() ))
+                        +list(map(id, model.classifier3.parameters() ))
+                        )
+            base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
+            optimizer_ft = optim.SGD([
+                {'params': base_params, 'lr': 0.1*opt.lr},
+                {'params': model.classifier0.parameters(), 'lr': opt.lr},
+                {'params': model.classifier1.parameters(), 'lr': opt.lr},
+                {'params': model.classifier2.parameters(), 'lr': opt.lr},
+                {'params': model.classifier3.parameters(), 'lr': opt.lr},
+            ], weight_decay=5e-4, momentum=0.9, nesterov=True)
 
-    if opt.PCB:
-        model = PCB(len(class_names))
+    if opt.adam:
+        optimizer_ft = optim.Adam(model.parameters(), opt.lr, weight_decay=5e-4)
 
-    if opt.CPB:
-        model = CPB(len(class_names))
+    # Decay LR by a factor of 0.1 every 40 epochs
+    #exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=40, gamma=0.1)
+    exp_lr_scheduler = lr_scheduler.MultiStepLR(optimizer_ft, milestones=[60-start_epoch, 75-start_epoch], gamma=0.1)
+
+    ######################################################################
+    # Train and evaluate
+    # ^^^^^^^^^^^^^^^^^^
+    #
+    # It should take around 1-2 hours on GPU.
+    #
+    dir_name = os.path.join('./data/outputs',name)
+    print(name)
+
+    if not opt.resume:
+        if not os.path.isdir(dir_name):
+            os.mkdir(dir_name)
+    #record every run
+        copyfile('./train.py', dir_name+'/train.py')
+        copyfile('./model.py', dir_name+'/model.py')
+    # save opts
+        with open('%s/opts.yaml'%dir_name,'w') as fp:
+            yaml.dump(vars(opt), fp, default_flow_style=False)
+
+    # model to gpu
+    if fp16:
+        #model = network_to_half(model)
+        #optimizer_ft = FP16_Optimizer(optimizer_ft, dynamic_loss_scale=True)
+        model, optimizer_ft = amp.initialize(model, optimizer_ft, opt_level = "O1")
+
 
     if opt.angle:
-        model = ft_net_angle(len(class_names), opt.droprate, opt.stride)
+        criterion = AngleLoss()
     elif opt.arc:
-        model = ft_net_arc(len(class_names), opt.droprate, opt.stride)
-
-if opt.init_name != 'imagenet':
-    old_opt = parser.parse_args()
-    init_model, old_opt, _ = load_network(opt.init_name, old_opt)
-    print(old_opt)
-    opt.stride = old_opt.stride
-    opt.pool = old_opt.pool
-    opt.use_dense = old_opt.use_dense
-    if opt.use_dense:
-        model = ft_net_dense(opt.nclasses, droprate=opt.droprate, stride=opt.stride, init_model=init_model, pool = opt.pool)
+        criterion = ArcLoss()
     else:
-        model = ft_net(opt.nclasses, droprate=opt.droprate, stride=opt.stride, init_model=init_model, pool = opt.pool)
+        criterion = nn.CrossEntropyLoss()
 
-
-##########################
-#Put model parameter in front of the optimizer!!!
-
-# For resume:
-if start_epoch>=60:
-    opt.lr = opt.lr*0.1
-if start_epoch>=75:
-    opt.lr = opt.lr*0.1
-
-if len(opt.gpu_ids)>1:
-    model = torch.nn.DataParallel(model, device_ids=opt.gpu_ids).cuda()
-    if not opt.CPB:
-        ignored_params = list(map(id, model.module.classifier.parameters() ))
-        base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
-        optimizer_ft = optim.SGD([
-             {'params': base_params, 'lr': 0.1*opt.lr},
-             {'params': model.module.classifier.parameters(), 'lr': opt.lr}
-         ], weight_decay=5e-4, momentum=0.9, nesterov=True)
-    else:
-        ignored_params = (list(map(id, model.module.classifier0.parameters() ))
-                     +list(map(id, model.module.classifier1.parameters() ))
-                     +list(map(id, model.module.classifier2.parameters() ))
-                     +list(map(id, model.module.classifier3.parameters() ))
-                      )
-        base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
-        optimizer_ft = optim.SGD([
-             {'params': base_params, 'lr': 0.1*opt.lr},
-             {'params': model.module.classifier0.parameters(), 'lr': opt.lr},
-             {'params': model.module.classifier1.parameters(), 'lr': opt.lr},
-             {'params': model.module.classifier2.parameters(), 'lr': opt.lr},
-             {'params': model.module.classifier3.parameters(), 'lr': opt.lr},
-         ], weight_decay=5e-4, momentum=0.9, nesterov=True)
-else:
-    model = model.cuda()
-    if not opt.CPB:
-        ignored_params = list(map(id, model.classifier.parameters() ))
-        base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
-        optimizer_ft = optim.SGD([
-             {'params': base_params, 'lr': 0.1*opt.lr},
-             {'params': model.classifier.parameters(), 'lr': opt.lr}
-         ], weight_decay=5e-4, momentum=0.9, nesterov=True)
-    else:
-        ignored_params = (list(map(id, model.classifier0.parameters() )) 
-                     +list(map(id, model.classifier1.parameters() ))
-                     +list(map(id, model.classifier2.parameters() ))
-                     +list(map(id, model.classifier3.parameters() ))
-                      )
-        base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
-        optimizer_ft = optim.SGD([
-             {'params': base_params, 'lr': 0.1*opt.lr},
-             {'params': model.classifier0.parameters(), 'lr': opt.lr},
-             {'params': model.classifier1.parameters(), 'lr': opt.lr},
-             {'params': model.classifier2.parameters(), 'lr': opt.lr},
-             {'params': model.classifier3.parameters(), 'lr': opt.lr},
-         ], weight_decay=5e-4, momentum=0.9, nesterov=True)
-
-if opt.adam:
-    optimizer_ft = optim.Adam(model.parameters(), opt.lr, weight_decay=5e-4)
-
-# Decay LR by a factor of 0.1 every 40 epochs
-#exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=40, gamma=0.1)
-exp_lr_scheduler = lr_scheduler.MultiStepLR(optimizer_ft, milestones=[60-start_epoch, 75-start_epoch], gamma=0.1)
-
-######################################################################
-# Train and evaluate
-# ^^^^^^^^^^^^^^^^^^
-#
-# It should take around 1-2 hours on GPU.
-#
-dir_name = os.path.join('./data/outputs',name)
-
-if not opt.resume:
-    if not os.path.isdir(dir_name):
-        os.mkdir(dir_name)
-#record every run
-    copyfile('./train.py', dir_name+'/train.py')
-    copyfile('./model.py', dir_name+'/model.py')
-# save opts
-    with open('%s/opts.yaml'%dir_name,'w') as fp:
-        yaml.dump(vars(opt), fp, default_flow_style=False)
-
-# model to gpu
-if fp16:
-    #model = network_to_half(model)
-    #optimizer_ft = FP16_Optimizer(optimizer_ft, dynamic_loss_scale=True)
-    model, optimizer_ft = amp.initialize(model, optimizer_ft, opt_level = "O1")
-
-
-if opt.angle:
-    criterion = AngleLoss()
-elif opt.arc:
-    criterion = ArcLoss()
-else:
-    criterion = nn.CrossEntropyLoss()
-
-print(model)
-model = train_model(model, criterion, optimizer_ft, exp_lr_scheduler,
-                    start_epoch=start_epoch, num_epochs=80)
+    print(model)
+    model = train_model(model, criterion, optimizer_ft, exp_lr_scheduler,
+                        start_epoch=start_epoch, num_epochs=80)
 

@@ -72,7 +72,7 @@ def load_network(name, opt):
     opt.batchsize = config['batchsize']
     opt.inputsize = config['inputsize']
     opt.stride = config['stride']
-  
+
     if 'pool' in config:
         opt.pool = config['pool']
     if 'use_DSE' in config:
