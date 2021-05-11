@@ -58,7 +58,7 @@ opt = parser.parse_args()
 # load the training config
 config_path = os.path.join('./data/outputs',opt.name,'opts.yaml')
 with open(config_path, 'r') as stream:
-        config = yaml.load(stream)
+        config = yaml.safe_load(stream)
 opt.fp16 = config['fp16'] 
 opt.PCB = config['PCB']
 opt.CPB = config['CPB']

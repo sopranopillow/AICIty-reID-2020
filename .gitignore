@@ -1,3 +1,4 @@
 *.jpg
 /pytorch/__pycache__/
 *.pth
+*.mat
