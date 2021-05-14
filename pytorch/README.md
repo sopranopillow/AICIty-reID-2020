@@ -54,4 +54,6 @@ If you want to directly test the result, the extracted features & camera predict
 ### Combine the feature extracted from Paddlepaddle & Pytorch Models to output the Submission.
 ```bash
 python fast_submit.py
+
+python submit_result_multimodel.py --names SE_imbalance_s1_384_p0.5_lr2_mt_d0_b24+v+aug
 ```

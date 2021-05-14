@@ -41,7 +41,7 @@ parser = argparse.ArgumentParser(description='Training')
 parser.add_argument('--gpu_ids',default='0', type=str,help='gpu_ids: e.g. 0  0,1,2  0,2')
 parser.add_argument('--ms',default='1', type=str,help='multiple_scale: e.g. 1 1,1.1  1,1.1,1.2')
 parser.add_argument('--which_epoch',default='59', type=str, help='0,1,2,3...or last')
-parser.add_argument('--test_dir',default='./data/2020AICITY/aicity20_all/',type=str, help='./test_data')
+parser.add_argument('--test_dir',default='./data/pytorch2020',type=str, help='./test_data')
 parser.add_argument('--crop_dir',default='./data/cropped_aicity',type=str, help='./test_data')
 parser.add_argument('--names', default='ft_ResNet50,xxxx,xxxxx', type=str, help='save model path')
 parser.add_argument('--batchsize', default=100, type=int, help='batchsize')
@@ -112,14 +112,14 @@ if opt.PCB:
 
 data_dir = test_dir
 
-image_datasets = {x: datasets.ImageFolder( os.path.join(data_dir,x) ,data_transforms) for x in ['image_test','image_query']}
+image_datasets = {x: datasets.ImageFolder( os.path.join(data_dir,x) ,data_transforms) for x in ['gallery','query']}
 dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=opt.batchsize,
-                                             shuffle=False, num_workers=16) for x in ['image_test','image_query']}
-cropped_image_datasets = {x: datasets.ImageFolder( os.path.join(opt.crop_dir,x) ,data_transforms) for x in ['image_test','image_query']}
-cropped_dataloaders = {x: torch.utils.data.DataLoader(cropped_image_datasets[x], batch_size=opt.batchsize,
-                                             shuffle=False, num_workers=16) for x in ['image_test','image_query']}
+                                             shuffle=False, num_workers=16) for x in ['gallery','query']}
+# cropped_image_datasets = {x: datasets.ImageFolder( os.path.join(opt.crop_dir,x) ,data_transforms) for x in ['gallery','query']}
+# cropped_dataloaders = {x: torch.utils.data.DataLoader(cropped_image_datasets[x], batch_size=opt.batchsize,
+                                            #  shuffle=False, num_workers=16) for x in ['gallery','query']}
 
-class_names = image_datasets['image_query'].classes
+class_names = image_datasets['query'].classes
 use_gpu = torch.cuda.is_available()
 
 
@@ -198,8 +198,8 @@ def predict_cam(model, dataloaders):
     return cams
 
 
-gallery_path = image_datasets['image_test'].imgs
-query_path = image_datasets['image_query'].imgs
+gallery_path = image_datasets['gallery'].imgs
+query_path = image_datasets['query'].imgs
 
 
 ######################################################################
@@ -220,26 +220,25 @@ if not os.path.isfile(snapshot_feature_mat):
     with torch.no_grad():
         gallery_feature, query_feature = torch.FloatTensor(), torch.FloatTensor()
         for model in models:
-            q_f = extract_feature(model,dataloaders['image_query']) 
-            q_f_crop = extract_feature(model,cropped_dataloaders['image_query']) 
-            q_f = q_f + q_f_crop
+            q_f = extract_feature(model,dataloaders['query']) 
+            # q_f_crop = extract_feature(model,cropped_dataloaders['query']) 
+            # q_f = q_f + q_f_crop
             qnorm = torch.norm(q_f, p=2, dim=1, keepdim=True)
             q_f = q_f.div(qnorm.expand_as(q_f)) / np.sqrt(len(names))
 
-            g_f = extract_feature(model,dataloaders['image_test']) 
-            g_f_crop = extract_feature(model,cropped_dataloaders['image_test']) 
-            g_f = g_f + g_f_crop
+            g_f = extract_feature(model,dataloaders['gallery']) 
+            # g_f_crop = extract_feature(model,cropped_dataloaders['gallery']) 
+            # g_f = g_f + g_f_crop
             gnorm = torch.norm(g_f, p=2, dim=1, keepdim=True)
             g_f = g_f.div(gnorm.expand_as(g_f)) / np.sqrt(len(names))            
 
             gallery_feature = torch.cat((gallery_feature,g_f), 1)
             query_feature = torch.cat((query_feature,q_f), 1)
 
-    result = {'image_test_f':gallery_feature.numpy(),'image_query_f':query_feature.numpy()}
+    result = {'gallery_f':gallery_feature.numpy(),'query_f':query_feature.numpy()}
     scipy.io.savemat(snapshot_feature_mat,result)
 else:
     result = scipy.io.loadmat(snapshot_feature_mat)
-    query_feature = torch.FloatTensor(result['image_query_f']).cuda()
-    gallery_feature = torch.FloatTensor(result['image_test_f']).cuda()
+    query_feature = torch.FloatTensor(result['query_f']).cuda()
+    gallery_feature = torch.FloatTensor(result['gallery_f']).cuda()
     print(np.where(np.isnan(gallery_feature.cpu().numpy())))
-

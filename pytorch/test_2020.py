@@ -347,5 +347,5 @@ result = {'gallery_f':gallery_feature.numpy(),'gallery_label':gallery_label,'gal
 scipy.io.savemat('pytorch_result.mat',result)
 
 result_file = './data/outputs/%s/result.txt'%opt.name
-calculate_result( gallery_feature, gallery_label, gallery_cam, query_feature, query_label, query_cam, result_file)
-#calculate_result_rerank( gallery_feature, gallery_label, gallery_cam, query_feature, query_label, query_cam, result_file)
+# calculate_result( gallery_feature, gallery_label, gallery_cam, query_feature, query_label, query_cam, result_file)
+calculate_result_rerank( gallery_feature, gallery_label, gallery_cam, query_feature, query_label, query_cam, result_file)
